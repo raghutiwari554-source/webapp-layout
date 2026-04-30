@@ -8,7 +8,7 @@
         https://cdn.jsdelivr.net/gh/<USER>/<REPO>@<BRANCH>/loader.js
    ===================================================================== */
 (function () {
-  var SERVER   = 'https://YOUR-RENDER-APP.onrender.com';
+  var SERVER   = 'https://token-auth-server.onrender.com';
   var HOMEPAGE = 'https://homepage-pw-marco.netlify.app';
   var HEARTBEAT_MS      = 5000;
   var CHECK_MS          = 3000;
