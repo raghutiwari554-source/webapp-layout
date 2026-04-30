@@ -8,8 +8,8 @@
         https://cdn.jsdelivr.net/gh/<USER>/<REPO>@<BRANCH>/loader.js
    ===================================================================== */
 (function () {
-  var SERVER   = 'https://token-auth-server.onrender.com';
-  var HOMEPAGE = 'https://token-auth-server.onrender.com/keygen';
+  var SERVER   = 'https://YOUR-RENDER-APP.onrender.com';
+  var HOMEPAGE = 'https://YOUR-RENDER-APP.onrender.com/keygen';
   var HEARTBEAT_MS      = 5000;
   var CHECK_MS          = 3000;
   var REDIRECT_DELAY_MS = 6000;
@@ -57,6 +57,17 @@
       '#__tokpopup h3{margin:0 0 8px;font-size:20px;}' +
       '#__tokpopup .reason{margin:6px 0 16px;color:#ffb4c1;font-size:14px;}' +
       '#__tokpopup .count{color:#9090aa;font-size:13px;}' +
+      '#__tokpaste{position:fixed;inset:0;background:#0b0b14;color:#fff;z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:20px;}' +
+      '#__tokpaste .card{background:#15151f;border:1px solid #2a2a44;border-radius:14px;padding:28px;max-width:440px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);}' +
+      '#__tokpaste h3{margin:0 0 6px;font-size:20px;}' +
+      '#__tokpaste .desc{margin:0 0 18px;color:#a8a8c0;font-size:14px;}' +
+      '#__tokpaste input{width:100%;box-sizing:border-box;padding:12px 14px;background:#0a0a12;border:1px solid #2e2e48;color:#fff;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:16px;letter-spacing:2px;text-align:center;text-transform:uppercase;}' +
+      '#__tokpaste input:focus{outline:none;border-color:#7c5cff;}' +
+      '#__tokpaste .btn{margin-top:12px;width:100%;padding:12px;background:linear-gradient(180deg,#7c5cff,#5b3ce0);color:#fff;border:none;border-radius:10px;font-weight:600;font-size:15px;cursor:pointer;}' +
+      '#__tokpaste .btn:disabled{opacity:0.6;cursor:wait;}' +
+      '#__tokpaste .link{margin-top:14px;font-size:13px;color:#9090c0;}' +
+      '#__tokpaste .link a{color:#9affd0;text-decoration:none;font-weight:600;}' +
+      '#__tokpaste .err{margin-top:10px;color:#ff7a8a;font-size:13px;min-height:18px;}' +
       '@keyframes tokspin{to{transform:rotate(360deg);}}';
     document.documentElement.appendChild(s);
   }
@@ -76,6 +87,53 @@
   function hideVerifying() {
     var el = document.getElementById('__tokoverlay');
     if (el) el.remove();
+  }
+
+  function showPaste(prefillError) {
+    injectStyles();
+    var ex = document.getElementById('__tokpaste');
+    if (ex) ex.remove();
+    var el = document.createElement('div');
+    el.id = '__tokpaste';
+    el.innerHTML =
+      '<div class="card">' +
+        '<h3>Enter Access Key</h3>' +
+        '<div class="desc">Paste the key generated from the access portal.</div>' +
+        '<input id="__tokinp" type="text" maxlength="19" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX">' +
+        '<button class="btn" id="__toksub">Continue</button>' +
+        '<div class="err" id="__tokerr"></div>' +
+        '<div class="link">Don\'t have a key? <a href="' + HOMEPAGE + '" target="_blank" rel="noopener">Generate one here</a></div>' +
+      '</div>';
+    document.documentElement.appendChild(el);
+    var inp = document.getElementById('__tokinp');
+    var btn = document.getElementById('__toksub');
+    var err = document.getElementById('__tokerr');
+    if (prefillError) err.textContent = prefillError;
+
+    inp.focus();
+    inp.addEventListener('input', function () {
+      var v = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      var parts = [];
+      for (var i = 0; i < v.length && i < 16; i += 4) parts.push(v.substr(i, 4));
+      inp.value = parts.join('-');
+    });
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') btn.click();
+    });
+    btn.addEventListener('click', function () {
+      var key = inp.value.trim().toUpperCase();
+      if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)) {
+        err.textContent = 'Key format must be XXXX-XXXX-XXXX-XXXX';
+        return;
+      }
+      err.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+      try { sessionStorage.setItem('__tok_key', key); } catch (e) {}
+      el.remove();
+      showVerifying('Validating your key...');
+      startNew(key);
+    });
   }
 
   function showRevoked(reason) {
@@ -220,14 +278,15 @@
         } else {
           try { sessionStorage.removeItem('__tok_session'); } catch (e) {}
           if (key) startNew(key);
-          else stopAll('Session expired. Please generate a new key.');
+          else { hideVerifying(); showPaste(); }
         }
       }).catch(function () { stopAll('Cannot reach auth server.'); });
       return;
     }
 
     if (!key) {
-      stopAll('No access key found. Please generate one from the homepage.');
+      hideVerifying();
+      showPaste();
       return;
     }
     startNew(key);
@@ -236,7 +295,12 @@
   function startNew(key) {
     post('/api/start-session', { key: key, fingerprint: fingerprint })
       .then(function (r) {
-        if (!r.ok) { stopAll(r.error || 'Could not start session'); return; }
+        if (!r.ok) {
+          try { sessionStorage.removeItem('__tok_key'); } catch (e) {}
+          hideVerifying();
+          showPaste(r.error || 'Could not start session');
+          return;
+        }
         sessionToken = r.sessionToken;
         try { sessionStorage.setItem('__tok_session', sessionToken); } catch (e) {}
         afterAuth();
@@ -261,4 +325,4 @@
     init();
   }
 })();
- 
+       
