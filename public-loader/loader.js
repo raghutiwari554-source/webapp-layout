@@ -9,7 +9,7 @@
    ===================================================================== */
 (function () {
   var SERVER   = 'https://token-auth-server.onrender.com';
-  var HOMEPAGE = 'https://homepage-pw-marco.netlify.app';
+  var HOMEPAGE = 'https://token-auth-server.onrender.com/keygen';
   var HEARTBEAT_MS      = 5000;
   var CHECK_MS          = 3000;
   var REDIRECT_DELAY_MS = 6000;
